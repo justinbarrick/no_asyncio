@@ -1,19 +1,14 @@
 import asyncio
 import functools
-import types
-import concurrent.futures
 import uvhttp.http
 import ast
-import json
-
-def start_loop(func):
-    @functools.wraps(func)
-    def new_func(*args, **kwargs):
-        asyncio.get_event_loop().run_until_complete(func())
-
-    return new_func
 
 class RewriteAST(ast.NodeTransformer):
+    """
+    Rewrite the AST to replace all functions that start with test_ with async
+    functions and all calls to *.do() and do() with awaits.
+    """
+
     def visit_FunctionDef(self, node):
         if not node.name.startswith('test'):
             return node
@@ -25,16 +20,25 @@ class RewriteAST(ast.NodeTransformer):
         return node
 
     def visit_Call(self, node):
-        if not isinstance(node.func, ast.Name):
+        """
+        Note: in the current implementation, awaiting on the magic function
+        won't work. Recursing the tree would be better.
+        """
+        if not isinstance(node.func, ast.Name) and not isinstance(node.func, ast.Attribute):
             return node
-           
-        if node.func.id != 'do':
+        elif isinstance(node.func, ast.Name) and node.func.id != 'do':
+            return node
+        elif isinstance(node.func, ast.Attribute) and node.func.attr != 'do':
             return node
 
-        node = ast.copy_location(ast.Await(value=node), node)
-        return node
+        return ast.copy_location(ast.Await(value=node), node)
 
 def rewrite_ast():
+    """
+    Load the current file and rewrite globals with the new AST.
+
+    This should be changed to an import() function for importing modules.
+    """
     global __name__
     __name__ = '__notmain__'
 
@@ -43,27 +47,42 @@ def rewrite_ast():
     tree = ast.fix_missing_locations(tree)
     exec(compile(tree, __file__, 'exec'), globals())
 
+def start_loop(func):
+    """
+    Wrapper for starting a loop to avoid needing multiple functions to start
+    the main function.
+    """
+    @functools.wraps(func)
+    def new_func(*args, **kwargs):
+        asyncio.get_event_loop().run_until_complete(func())
+
+    return new_func
+
 @start_loop
 async def main():
     t = Test()
 
+    # Make two requests at once.
     task = asyncio.ensure_future(t.test_async_func())
     task2 = asyncio.ensure_future(t.test_async_func())
 
     await asyncio.wait([task, task2])
-
-
-async def do(session):
-    return await session.get(b'http://127.0.0.1/')
 
 class Test:
     def __init__(self):
         self.session = uvhttp.http.Session(10, loop=asyncio.get_event_loop())
 
     def test_async_func(self):
+        """
+        This example function will be rewritten to an async function that will
+        await on self.do()
+        """
         for _ in range(10):
-            t = do(self.session)
+            t = self.do()
             print(t.status_code)
+
+    async def do(self):
+        return await self.session.get(b'http://127.0.0.1/')
 
 if __name__ == '__main__':
     rewrite_ast()
