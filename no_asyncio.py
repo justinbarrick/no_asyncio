@@ -53,7 +53,16 @@ class RewriteAST(ast.NodeTransformer):
         return node
 
 class NoAsync(type):
+    """
+    Metaclass that automatically converts methods that call functions matching
+    the magic name (self.magic) to async functions and awaits on the magic
+    functions.
+
+    As it is a metaclass, the methods are rewritten when the class is first
+    defined.
+    """
     def __new__(cls, name, bases, namespace):
+        # make sure we aren't already importing
         try:
             __importing__
             return type.__new__(cls, name, bases, namespace)
@@ -61,6 +70,8 @@ class NoAsync(type):
             pass
 
         try:
+            # Fetch __importing__ from the calling scope in case it's
+            # different.
             inspect.stack()[1][0].f_globals['__importing__']
             return type.__new__(cls, name, bases, namespace)
         except KeyError:
@@ -73,12 +84,18 @@ class NoAsync(type):
         tree = ast.fix_missing_locations(tree)
 
         def compile_context():
+            # Set __importing__ to True in the import scope.
             g = globals().copy()
             g['__importing__'] = True
+
+            # Compile and execute the execute the AST return its scope.
             compiled = compile(tree, code_file, 'exec')
             exec(compiled, g)
+
+            # Return the scope.
             return g
 
+        # Update the class's scope with the imported class.
         namespace.update(compile_context()[name].__dict__)
         return type.__new__(cls, name, bases, namespace)
 
