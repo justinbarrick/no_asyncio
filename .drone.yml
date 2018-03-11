@@ -1,0 +1,10 @@
+pipeline:
+  test:
+    image: python:alpine3.6
+    commands:
+    - pip install -r dev-requirements.txt
+    - py.test -v .
+
+  publish:
+    image: justinbarrick/drone-pypi:latest
+    secrets: [ PYPI_USERNAME, PYPI_PASSWORD ]
