@@ -6,7 +6,7 @@ import ast
 
 class RewriteAST(ast.NodeTransformer):
     """
-    Rewrite the AST to replace all functions that start with test_ with async
+    Rewrite the AST to replace all functions that call the magic async
     functions and all calls to the provided magic string *.magic*() and
     magic*() with awaits.
     """
