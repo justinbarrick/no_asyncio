@@ -9,13 +9,13 @@ that call any function matching a magic string pattern to async functions.
 This code:
 
 ```
-class MyTest(metaclass=no_asyncio.NoAsync):
+class MyExample(metaclass=no_asyncio.NoAsync):
     magic = 'head'
 
     def __init__(self):
         self.session = uvhttp.http.Session(10, loop=asyncio.get_event_loop())
 
-    def test_hi(self):
+    def do_request(self):
         response = self.session.head(b'http://127.0.0.1/')
         print(response.status_code)
 ```
@@ -23,13 +23,13 @@ class MyTest(metaclass=no_asyncio.NoAsync):
 Becomes rewritten to the following at runtime:
 
 ```
-class MyTest(metaclass=no_asyncio.NoAsync):
+class MyExample(metaclass=no_asyncio.NoAsync):
     magic = 'head'
 
     def __init__(self):
         self.session = uvhttp.http.Session(10, loop=asyncio.get_event_loop())
 
-    async def test_hi(self):
+    async def do_request(self):
         response = await self.session.head(b'http://127.0.0.1/')
         print(response.status_code)
 ```

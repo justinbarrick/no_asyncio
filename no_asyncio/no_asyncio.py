@@ -1,6 +1,3 @@
-import asyncio
-import functools
-import uvhttp.http
 import inspect
 import ast
 
@@ -14,14 +11,20 @@ class RewriteAST(ast.NodeTransformer):
     def __init__(self, magic):
         self.magic = magic
 
+    def starts_with_magic(self, name):
+        for magic in self.magic:
+            if name.startswith(magic):
+                return True
+        return False
+
     def is_magic_call(self, node):
         if not isinstance(node, ast.Call):
             return False
         elif not isinstance(node.func, ast.Name) and not isinstance(node.func, ast.Attribute):
             return False
-        elif isinstance(node.func, ast.Name) and not node.func.id.startswith(self.magic):
+        elif isinstance(node.func, ast.Name) and not self.starts_with_magic(node.func.id):
             return False
-        elif isinstance(node.func, ast.Attribute) and not node.func.attr.startswith(self.magic):
+        elif isinstance(node.func, ast.Attribute) and not self.starts_with_magic(node.func.attr):
             return False
 
         return True
@@ -98,50 +101,3 @@ class NoAsync(type):
         # Update the class's scope with the imported class.
         namespace.update(compile_context()[name].__dict__)
         return type.__new__(cls, name, bases, namespace)
-
-def start_loop(func):
-    """
-    Wrapper for starting a loop to avoid needing multiple functions to start
-    the main function.
-    """
-    @functools.wraps(func)
-    def new_func(*args, **kwargs):
-        asyncio.get_event_loop().run_until_complete(func())
-
-    return new_func
-
-class Test(metaclass=NoAsync):
-    def __init__(self):
-        self.session = uvhttp.http.Session(10, loop=asyncio.get_event_loop())
-
-    def test_lol(self):
-        self.do()
-
-    def test_async_func(self):
-        """
-        This example function will be rewritten to an async function that will
-        await on self.do()
-        """
-        for _ in range(10):
-            t = self.do()
-            print(t.status_code)
-
-    async def do(self):
-        return await self.session.get(b'http://127.0.0.1/')
-
-@start_loop
-async def main():
-    t = Test()
-
-    # Make two requests at once.
-    task = asyncio.ensure_future(t.test_async_func())
-    task2 = asyncio.ensure_future(t.test_async_func())
-    task3 = asyncio.ensure_future(t.test_lol())
-
-    await asyncio.wait([task, task2, task3])
-
-if __name__ == '__main__':
-    try:
-        __importing__
-    except NameError:
-        main()
